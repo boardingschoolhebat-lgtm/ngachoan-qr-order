@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 
 export default function DapurView() {
@@ -126,12 +126,23 @@ export default function DapurView() {
                     </h3>
 
                     <div className="space-y-2 mb-6">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-sm bg-slate-900/50 p-2 rounded-lg border border-slate-800/40">
-                          <span className="text-slate-300 font-medium">{item.name}</span>
-                          <span className={`text-base font-black bg-slate-800 px-2 py-0.5 rounded-md ${isProcessing ? "text-sky-400" : "text-emerald-400"}`}>
-                            x{item.quantity}
-                          </span>
+                      {(order.items || []).map((item, idx) => (
+                        <div key={idx} className="text-sm bg-slate-900/50 p-2 rounded-lg border border-slate-800/40">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-300 font-medium">{item.name}</span>
+                            <span className={`text-base font-black bg-slate-800 px-2 py-0.5 rounded-md ${isProcessing ? "text-sky-400" : "text-emerald-400"}`}>
+                              x{item.quantity}
+                            </span>
+                          </div>
+                          {Array.isArray(item.options) && item.options.length > 0 && (
+                            <ul className="mt-1 pl-3 space-y-0.5">
+                              {item.options.map((option, optionIdx) => (
+                                <li key={optionIdx} className="text-[11px] text-amber-400/90">
+                                  + {option.option_name}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -191,11 +202,21 @@ export default function DapurView() {
 
           <table className="w-full mb-3">
             <tbody>
-              {activePrintOrder.items.map((item, idx) => (
-                <tr key={idx} className="border-b border-slate-100">
-                  <td className="py-1 text-left font-bold">{item.name}</td>
-                  <td className="py-1 text-right font-black text-sm">x{item.quantity}</td>
-                </tr>
+              {(activePrintOrder.items || []).map((item, idx) => (
+                <Fragment key={idx}>
+                  <tr>
+                    <td className="py-1 text-left font-bold">{item.name}</td>
+                    <td className="py-1 text-right font-black text-sm">x{item.quantity}</td>
+                  </tr>
+                  {Array.isArray(item.options) &&
+                    item.options.map((option, optionIdx) => (
+                      <tr key={`${idx}-${optionIdx}`}>
+                        <td colSpan={2} className="pl-3 text-left text-[10px]">
+                          + {option.option_name}
+                        </td>
+                      </tr>
+                    ))}
+                </Fragment>
               ))}
             </tbody>
           </table>

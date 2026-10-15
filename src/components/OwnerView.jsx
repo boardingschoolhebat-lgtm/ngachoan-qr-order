@@ -30,10 +30,12 @@ export default function OwnerView() {
 
       // 3. Kalkulasi data secara mutakhir
       data.forEach((order) => {
-        revenue += parseFloat(order.total_price);
+        revenue += parseFloat(order.total_price) || 0;
 
         // Bedah struktur JSON kolom items untuk hitung kuantitas menu terlaris
+        if (!Array.isArray(order.items)) return;
         order.items.forEach((item) => {
+          if (!item || !item.name) return;
           if (itemsMap[item.name]) {
             itemsMap[item.name] += item.quantity;
           } else {
