@@ -134,8 +134,8 @@ function CustomerView({ tableNumber }) {
   const [optionModalItem, setOptionModalItem] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const loadMenu = useCallback(async () => {
-    setMenuLoading(true);
+  const loadMenu = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setMenuLoading(true);
     setMenuError("");
     try {
       const tree = await fetchMenuTree();
@@ -143,7 +143,7 @@ function CustomerView({ tableNumber }) {
     } catch (error) {
       setMenuError(error.message);
     } finally {
-      setMenuLoading(false);
+      if (showSpinner) setMenuLoading(false);
     }
   }, []);
 
@@ -151,7 +151,7 @@ function CustomerView({ tableNumber }) {
     loadMenu();
 
     const unsubscribe = subscribeToMenu(() => {
-      loadMenu();
+      loadMenu(false);
     });
 
     return () => unsubscribe();
@@ -311,7 +311,7 @@ function CustomerView({ tableNumber }) {
           <div className="flex flex-col items-center justify-center h-[40vh] gap-4">
             <p className="text-red-400 font-bold text-center">{menuError}</p>
             <button
-              onClick={loadMenu}
+              onClick={() => loadMenu()}
               className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl"
             >
               Coba Lagi
@@ -350,8 +350,12 @@ function CustomerView({ tableNumber }) {
                     key={item.id}
                     className="bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden flex flex-row h-36 hover:border-slate-700 transition-all duration-200 shadow-sm"
                   >
-                    <div className="w-1/3 relative h-full">
-                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                    <div className="w-1/3 relative h-full bg-slate-800">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-600 text-2xl">🍽️</div>
+                      )}
                     </div>
                     <div className="w-2/3 p-3 flex flex-col justify-between">
                       <div>
@@ -460,11 +464,15 @@ function CustomerView({ tableNumber }) {
                     }`}
                   >
                     <div className="flex items-start space-x-3">
-                      <img
-                        src={line.image}
-                        alt={line.name}
-                        className="w-12 h-12 rounded-lg object-cover border border-slate-800"
-                      />
+                      {line.image ? (
+                        <img
+                          src={line.image}
+                          alt={line.name}
+                          className="w-12 h-12 rounded-lg object-cover border border-slate-800"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-slate-800 border border-slate-800 flex items-center justify-center text-slate-600">🍽️</div>
+                      )}
                       <div>
                         <h4 className="text-sm font-bold text-slate-200 line-clamp-1">{line.name}</h4>
                         {line.options.length > 0 && (
