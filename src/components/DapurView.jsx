@@ -1,19 +1,27 @@
 import { Fragment, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { finishOrder, startOrder } from "../lib/orderApi";
 
 export default function DapurView() {
   const [orders, setOrders] = useState([]);
   const [activePrintOrder, setActivePrintOrder] = useState(null);
+  const [error, setError] = useState("");
 
-  // 1. Tarik data yang berstatus PENDING maupun PROCESSING
+  // 1. Hanya pesanan yang sudah dirilis ke dapur (kitchen_released)
   const fetchOrders = async () => {
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("orders")
       .select("*")
-      .in("status", ["PENDING", "PROCESSING"]) // Menampilkan kedua status di monitor
+      .eq("kitchen_released", true)
+      .in("order_status", ["PENDING", "PROCESSING"])
       .order("id", { ascending: true });
 
-    if (!error) setOrders(data);
+    if (fetchError) {
+      setError(fetchError.message);
+      return;
+    }
+    setError("");
+    setOrders(data || []);
   };
 
   useEffect(() => {
@@ -46,25 +54,21 @@ export default function DapurView() {
     }, 100);
 
     // Update status ke PROCESSING di Supabase Cloud jika sebelumnya masih PENDING
-    if (order.status === "PENDING") {
-      const { error } = await supabase
-        .from("orders")
-        .update({ status: "PROCESSING" })
-        .eq("id", order.id);
-
-      if (error) console.error("Gagal update status ke Processing:", error.message);
+    if (order.order_status === "PENDING") {
+      try {
+        await startOrder(order.id);
+      } catch (err) {
+        console.error("Gagal update status ke Processing:", err.message);
+      }
     }
   };
 
   // 3. Klik Selesai: Ubah Status ke DONE (Selesai Dimasak)
   const handleCompleteOrder = async (orderId) => {
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: "DONE" })
-      .eq("id", orderId);
-
-    if (error) {
-      alert("Gagal update status: " + error.message);
+    try {
+      await finishOrder(orderId);
+    } catch (err) {
+      alert("Gagal update status: " + err.message);
     }
   };
 
@@ -84,6 +88,12 @@ export default function DapurView() {
           </div>
         </header>
 
+        {error && (
+          <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-bold px-4 py-3 rounded-xl">
+            Gagal memuat pesanan: {error}
+          </div>
+        )}
+
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[60vh] border-2 border-dashed border-slate-800 rounded-3xl">
             <p className="text-slate-500 font-medium text-lg">Belum ada pesanan masuk. Dapur standby! ☕</p>
@@ -91,7 +101,7 @@ export default function DapurView() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {orders.map((order) => {
-              const isProcessing = order.status === "PROCESSING";
+              const isProcessing = order.order_status === "PROCESSING";
               
               return (
                 <div 
@@ -121,9 +131,26 @@ export default function DapurView() {
                       </span>
                     </div>
 
-                    <h3 className="text-xl font-black text-slate-100 tracking-wide mb-4 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+                    <h3 className="text-xl font-black text-slate-100 tracking-wide mb-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
                       📍 {order.table_number}
                     </h3>
+
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                        order.payment_method === "ONLINE"
+                          ? "text-sky-400 bg-sky-500/10 border-sky-500/20"
+                          : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                      }`}>
+                        {order.payment_method === "ONLINE" ? "Bayar Online" : "Bayar di Kasir"}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                        order.payment_status === "PAID"
+                          ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                          : "text-red-400 bg-red-500/10 border-red-500/20"
+                      }`}>
+                        {order.payment_status === "PAID" ? "LUNAS" : "BELUM BAYAR"}
+                      </span>
+                    </div>
 
                     <div className="space-y-2 mb-6">
                       {(order.items || []).map((item, idx) => (

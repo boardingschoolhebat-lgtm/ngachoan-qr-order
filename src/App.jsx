@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { supabase } from "./supabaseClient";
+import { createOrder, markOrderPaid } from "./lib/orderApi";
 import { fetchMenuTree, fetchMyStaff, subscribeToMenu } from "./lib/menuApi";
 import DapurView from "./components/DapurView";
 import OwnerView from "./components/OwnerView";
@@ -133,6 +133,7 @@ function CustomerView({ tableNumber }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [optionModalItem, setOptionModalItem] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
 
   const loadMenu = useCallback(async (showSpinner = true) => {
     if (showSpinner) setMenuLoading(true);
@@ -240,45 +241,35 @@ function CustomerView({ tableNumber }) {
 
     setSubmitting(true);
     try {
-      const orderId = "NGCHN-" + Date.now();
-      const items = cart.map((line) => ({
+      const lines = cart.map((line) => ({
         menu_item_id: line.menu_item_id,
-        name: line.name,
-        base_price: line.base_price,
         quantity: line.quantity,
-        options: line.options,
-        unit_price: line.unit_price,
-        line_total: line.unit_price * line.quantity,
+        option_item_ids: line.options.map((option) => option.option_item_id),
       }));
 
-      const orderData = {
-        id_order_fintech: orderId,
-        table_number: tableNumber,
-        items,
-        total_price: totalPrice,
-        status: "UNPAID",
-        created_at: new Date().toISOString(),
-      };
+      const orderId = await createOrder({
+        tableNumber,
+        paymentMethod,
+        lines,
+      });
 
-      const { error } = await supabase.from("orders").insert([orderData]);
-      if (error) throw error;
-
-      alert(
-        `🔐 Menghubungkan ke Gerbang Pembayaran Elektronik...\nTotal yang harus dibayar: Rp ${totalPrice.toLocaleString("id-ID")}`
-      );
-      alert("Simulasi Fintech: Pembayaran Berhasil! Sinyal Webhook Midtrans diterima oleh Cloud Supabase.");
-
-      await supabase.from("orders").update({ status: "PENDING" }).eq("id_order_fintech", orderId);
-
-      alert(`Sukses! Pembayaran diverifikasi bank. Pesanan Meja ${tableNumber} otomatis dikirim ke monitor dapur! 🔥`);
+      if (paymentMethod === "ONLINE") {
+        alert(
+          `🔐 Menghubungkan ke Gerbang Pembayaran Elektronik...\nTotal yang harus dibayar: Rp ${totalPrice.toLocaleString("id-ID")}`
+        );
+        await markOrderPaid(orderId);
+        alert(`Sukses! Pembayaran diterima. Pesanan Meja ${tableNumber} dikirim ke monitor dapur! 🔥`);
+      } else {
+        alert(
+          `Pesanan Meja ${tableNumber} dikirim ke dapur! 🍳\nSilakan bayar di kasir sebesar Rp ${totalPrice.toLocaleString("id-ID")}.`
+        );
+      }
 
       setCart([]);
       setIsModalOpen(false);
     } catch (error) {
       console.error("Error:", error.message);
-      alert(`Gagal memproses pembayaran: ${error.message}`);
-      setCart([]);
-      setIsModalOpen(false);
+      alert(`Gagal memproses pesanan: ${error.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -514,6 +505,34 @@ function CustomerView({ tableNumber }) {
             </div>
 
             <div className="border-t border-slate-800 pt-4 mt-4 space-y-4">
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Metode Pembayaran</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setPaymentMethod("CASH")}
+                    className={`px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                      paymentMethod === "CASH"
+                        ? "bg-amber-500/10 border-amber-500"
+                        : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                    }`}
+                  >
+                    <span className="block text-sm font-bold text-slate-100">Bayar di Kasir</span>
+                    <span className="block text-[10px] text-slate-500">Langsung ke dapur</span>
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod("ONLINE")}
+                    className={`px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                      paymentMethod === "ONLINE"
+                        ? "bg-amber-500/10 border-amber-500"
+                        : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                    }`}
+                  >
+                    <span className="block text-sm font-bold text-slate-100">Bayar Online</span>
+                    <span className="block text-[10px] text-slate-500">Masuk dapur setelah lunas</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex justify-between items-center">
                 <span className="text-sm text-slate-400 font-medium">Subtotal Pesanan</span>
                 <span className="text-lg font-black text-amber-400">Rp {totalPrice.toLocaleString("id-ID")}</span>
@@ -530,7 +549,11 @@ function CustomerView({ tableNumber }) {
                 disabled={submitting || hasUnavailableInCart}
                 className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3.5 rounded-xl text-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {submitting ? "Memproses..." : "Pesan Sekarang 🍳"}
+                {submitting
+                  ? "Memproses..."
+                  : paymentMethod === "ONLINE"
+                    ? "Bayar & Pesan 🍳"
+                    : "Pesan Sekarang 🍳"}
               </button>
             </div>
           </div>
