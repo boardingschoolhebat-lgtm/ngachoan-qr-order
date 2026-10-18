@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { supabase } from "./supabaseClient";
 import { createOrder } from "./lib/orderApi";
 import { createPayment } from "./lib/paymentApi";
 import { fetchMenuTree, fetchMyStaff, subscribeToMenu } from "./lib/menuApi";
@@ -8,6 +9,7 @@ import LoginView from "./components/LoginView";
 import MenuAdminView from "./components/MenuAdminView";
 import OptionSelectModal from "./components/OptionSelectModal";
 import PaymentResultView from "./components/PaymentResultView";
+import StaffView from "./components/StaffView";
 
 function lineSignature(menuItemId, options) {
   const ids = options
@@ -44,6 +46,11 @@ function App() {
       return;
     }
 
+    if (pageParam === "staff") {
+      setCurrentPage("staff");
+      return;
+    }
+
     if (pageParam === "payment-result") {
       setCurrentPage("payment-result");
       setPaymentOrderId(queryParams.get("order") || "");
@@ -56,6 +63,25 @@ function App() {
     } else {
       setTableNumber("TIDAK DIKETAHUI (SILAKAN SCAN QR KEMBALI)");
     }
+  }, []);
+
+  // Restore the session on load and follow sign-in/sign-out events so a refresh
+  // never logs staff out unexpectedly.
+  useEffect(() => {
+    let cancelled = false;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) setUser(data?.session?.user ?? null);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      cancelled = true;
+      listener?.subscription?.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -94,7 +120,10 @@ function App() {
     if (!user) {
       return <LoginView onLoginSuccess={(loggedInUser) => setUser(loggedInUser)} />;
     }
-    if (user.email !== "dapur@ngachoan.com" && user.email !== "owner@ngachoan.com") {
+    if (staffRecord === undefined) {
+      return <AccessChecking />;
+    }
+    if (!staffRecord || !["kitchen", "owner", "manager"].includes(staffRecord.role)) {
       return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400 font-bold p-4 text-center">
           ⚠️ Hak Akses Ditolak! Halaman ini khusus perangkat Dapur.
@@ -108,7 +137,10 @@ function App() {
     if (!user) {
       return <LoginView onLoginSuccess={(loggedInUser) => setUser(loggedInUser)} />;
     }
-    if (user.email !== "owner@ngachoan.com") {
+    if (staffRecord === undefined) {
+      return <AccessChecking />;
+    }
+    if (!staffRecord || staffRecord.role !== "owner") {
       return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400 font-bold p-4 text-center">
           ⚠️ Hak Akses Ditolak! Anda bukan Pemilik Restoran.
@@ -123,11 +155,7 @@ function App() {
       return <LoginView onLoginSuccess={(loggedInUser) => setUser(loggedInUser)} />;
     }
     if (staffRecord === undefined) {
-      return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500 font-bold p-4 text-center">
-          Memeriksa hak akses...
-        </div>
-      );
+      return <AccessChecking />;
     }
     if (!staffRecord || (staffRecord.role !== "owner" && staffRecord.role !== "manager")) {
       return (
@@ -139,9 +167,34 @@ function App() {
     return <MenuAdminView />;
   }
 
+  if (currentPage === "staff") {
+    if (!user) {
+      return <LoginView onLoginSuccess={(loggedInUser) => setUser(loggedInUser)} />;
+    }
+    if (staffRecord === undefined) {
+      return <AccessChecking />;
+    }
+    if (!staffRecord || staffRecord.role !== "owner") {
+      return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400 font-bold p-4 text-center">
+          ⚠️ Hak Akses Ditolak! Halaman ini khusus Owner.
+        </div>
+      );
+    }
+    return <StaffView displayName={staffRecord.display_name || staffRecord.email} />;
+  }
+
   // ================================================================================
 
   return <CustomerView tableNumber={tableNumber} />;
+}
+
+function AccessChecking() {
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500 font-bold p-4 text-center">
+      Memeriksa hak akses...
+    </div>
+  );
 }
 
 function CustomerView({ tableNumber }) {

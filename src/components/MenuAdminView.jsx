@@ -36,11 +36,19 @@ export default function MenuAdminView() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-      <header className="border-b border-slate-800 pb-4 mb-6">
-        <h1 className="text-2xl font-black tracking-tight text-amber-500">
-          🍽️ MENU MANAGEMENT
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">Kelola kategori, menu, dan grup opsi</p>
+      <header className="border-b border-slate-800 pb-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight text-amber-500">
+            🍽️ MENU MANAGEMENT
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">Kelola kategori, menu, dan grup opsi</p>
+        </div>
+        <a
+          href="?page=staff"
+          className="bg-slate-900 hover:bg-slate-800 text-xs text-slate-300 px-4 py-2 rounded-xl border border-slate-800 font-bold self-start"
+        >
+          Staf & Meja
+        </a>
       </header>
 
       <div className="flex gap-2 mb-6">

@@ -100,11 +100,23 @@ export async function fetchMyStaff() {
   const userId = userData?.user?.id;
   if (!userId) return null;
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("staff")
     .select("*")
     .eq("user_id", userId)
+    .eq("is_active", true)
     .maybeSingle();
+
+  // Tolerate a deployment where migration 005 has not added `is_active` yet.
+  if (error && /is_active/i.test(error.message)) {
+    const retry = await supabase
+      .from("staff")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
 
   assertNoError(error, "Gagal memuat data staff");
   return data || null;
