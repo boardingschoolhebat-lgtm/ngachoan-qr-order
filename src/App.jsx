@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createOrder, markOrderPaid } from "./lib/orderApi";
+import { createOrder } from "./lib/orderApi";
+import { createPayment } from "./lib/paymentApi";
 import { fetchMenuTree, fetchMyStaff, subscribeToMenu } from "./lib/menuApi";
 import DapurView from "./components/DapurView";
 import OwnerView from "./components/OwnerView";
 import LoginView from "./components/LoginView";
 import MenuAdminView from "./components/MenuAdminView";
 import OptionSelectModal from "./components/OptionSelectModal";
+import PaymentResultView from "./components/PaymentResultView";
 
 function lineSignature(menuItemId, options) {
   const ids = options
@@ -18,6 +20,7 @@ function lineSignature(menuItemId, options) {
 function App() {
   const [currentPage, setCurrentPage] = useState("pelanggan");
   const [tableNumber, setTableNumber] = useState("Scanning...");
+  const [paymentOrderId, setPaymentOrderId] = useState("");
   const [user, setUser] = useState(null);
   // undefined = still loading, null = not staff, object = staff row
   const [staffRecord, setStaffRecord] = useState(undefined);
@@ -38,6 +41,12 @@ function App() {
 
     if (pageParam === "menu") {
       setCurrentPage("menu");
+      return;
+    }
+
+    if (pageParam === "payment-result") {
+      setCurrentPage("payment-result");
+      setPaymentOrderId(queryParams.get("order") || "");
       return;
     }
 
@@ -69,6 +78,17 @@ function App() {
   }, [user]);
 
   // ==================== BENTENG PROTEKSI HALAMAN STAFF & OWNER ====================
+
+  if (currentPage === "payment-result") {
+    if (!paymentOrderId) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400 font-bold p-4 text-center">
+          ⚠️ Pesanan tidak ditemukan. Silakan kembali ke menu.
+        </div>
+      );
+    }
+    return <PaymentResultView orderId={paymentOrderId} />;
+  }
 
   if (currentPage === "dapur") {
     if (!user) {
@@ -255,18 +275,30 @@ function CustomerView({ tableNumber }) {
 
       if (paymentMethod === "ONLINE") {
         alert(
-          `🔐 Menghubungkan ke Gerbang Pembayaran Elektronik...\nTotal yang harus dibayar: Rp ${totalPrice.toLocaleString("id-ID")}`
+          `🔐 Menghubungkan ke Gerbang Pembayaran...\nTotal yang harus dibayar: Rp ${totalPrice.toLocaleString("id-ID")}`
         );
-        await markOrderPaid(orderId);
-        alert(`Sukses! Pembayaran diterima. Pesanan Meja ${tableNumber} dikirim ke monitor dapur! 🔥`);
+        const payment = await createPayment(orderId);
+
+        setCart([]);
+        setIsModalOpen(false);
+
+        if (payment?.redirect_url) {
+          window.location.href = payment.redirect_url;
+          return;
+        }
+
+        if (payment?.paid) {
+          alert(`Sukses! Pembayaran diterima. Pesanan Meja ${tableNumber} dikirim ke monitor dapur! 🔥`);
+        } else {
+          alert("Pembayaran belum selesai. Silakan cek halaman status pembayaran.");
+        }
       } else {
         alert(
           `Pesanan Meja ${tableNumber} dikirim ke dapur! 🍳\nSilakan bayar di kasir sebesar Rp ${totalPrice.toLocaleString("id-ID")}.`
         );
+        setCart([]);
+        setIsModalOpen(false);
       }
-
-      setCart([]);
-      setIsModalOpen(false);
     } catch (error) {
       console.error("Error:", error.message);
       alert(`Gagal memproses pesanan: ${error.message}`);
